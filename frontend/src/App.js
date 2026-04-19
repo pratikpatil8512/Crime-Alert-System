@@ -1,0 +1,87 @@
+import { BrowserRouter as Router, Routes, Route, /*Navigate*/ } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
+
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Map from './pages/Map';
+import AdminPanel from './pages/AdminPanel';
+import Unauthorized from './pages/Unauthorized';
+import Register from './pages/Register';
+import ReportCrime from './pages/ReportCrime';
+import VerifyEmail from './pages/VerifyEmail';
+import ReportTip from './pages/ReportTip';
+import TipModeration from './pages/TipModeration';
+import NotFound from './pages/PageNotFound'
+
+
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* ✅ Homepage */}
+        <Route path="/" element={<Home />} />
+
+        {/* Login */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="//verify-email" element={<VerifyEmail />} />
+
+        <Route
+  path="/report"
+  element={
+    <ProtectedRoute allowedRoles={['admin', 'police']}>
+      <ReportCrime />
+    </ProtectedRoute>
+  }
+/>
+
+        {/* Protected routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/report-tip" element={<ReportTip />} />
+
+
+        <Route
+  path="/tip-moderation"
+  element={
+    <ProtectedRoute allowedRoles={['admin', 'police']}>
+      <TipModeration />
+    </ProtectedRoute>
+  }
+/>
+
+
+        <Route
+          path="/map"
+          element={
+            <ProtectedRoute>
+              <Map />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin-panel"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminPanel />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/unauthorized" element={<Unauthorized />} />
+
+        {/* Fallback redirect */}
+        <Route path="*" element={<NotFound/>} />
+      </Routes>
+    </Router>
+  );
+}
