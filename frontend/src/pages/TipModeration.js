@@ -1,6 +1,7 @@
 // src/pages/TipModeration.js
 import React, { useEffect, useState } from "react";
 import api from "../utils/api";
+import TipLocationPreview from "../components/TipLocationPreview";
 
 // Helper component for a modern button with consistent styling
 const ActionButton = ({ onClick, color, children, className = "" }) => (
@@ -140,6 +141,14 @@ export default function TipModeration() {
                     </span>
                 </p>
             </div>
+
+            <div className="my-4 border-t border-gray-200" />
+
+            <TipLocationPreview
+              latitude={tip.latitude}
+              longitude={tip.longitude}
+              title={tip.title}
+            />
             
             <div className="my-4 border-t border-gray-200" />
             

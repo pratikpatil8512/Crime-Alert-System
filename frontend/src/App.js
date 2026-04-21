@@ -12,6 +12,7 @@ import ReportCrime from './pages/ReportCrime';
 import VerifyEmail from './pages/VerifyEmail';
 import ReportTip from './pages/ReportTip';
 import TipModeration from './pages/TipModeration';
+import Statistics from './pages/Statistics';
 import NotFound from './pages/PageNotFound'
 
 
@@ -64,6 +65,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Map />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/statistics"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'police']}>
+              <Statistics />
             </ProtectedRoute>
           }
         />

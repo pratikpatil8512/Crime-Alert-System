@@ -1,0 +1,157 @@
+MEGAPROJECT (Crime Alert System) — High Level Structure
+=====================================================
+
+This repo is split into 2 apps:
+
+1) backend/   -> Node.js + Express API (talks to the database)
+2) frontend/  -> React web app (UI that calls the API)
+
+
+-----------------------
+Backend (backend/)
+-----------------------
+
+Goal:
+- Exposes REST API endpoints used by the React app.
+- Reads/writes data in a Postgres database (Supabase).
+- Uses JWT auth + role-based access control for sensitive endpoints.
+- Also sets up Socket.IO for real-time events (used by controllers).
+
+Key files/folders:
+
+- backend/app.js
+  - Main server entry point.
+  - Creates the Express app, configures CORS + JSON body parsing.
+  - Mounts routes:
+    - /api/auth        -> backend/routes/authRoutes.js
+    - /api             -> backend/routes/statRoutes.js   (includes /api/statistics)
+    - /api/crimes      -> backend/routes/crimeRoutes.js
+    - /api/location    -> backend/routes/locationRoutes.js
+    - /api/tips        -> backend/routes/tipRoutes.js
+  - Creates an HTTP server and attaches Socket.IO.
+  - Starts listening on PORT (default 5000).
+
+- backend/db.js
+  - Database connection setup (pg Pool).
+  - Uses env var DATABASE_URL (Supabase connection string).
+
+- backend/routes/
+  - Defines the URL paths and the middleware chain.
+  - Each route file usually does:
+    "router.<method>(<path>, <auth middleware>, <role middleware>, <controller fn>)"
+
+- backend/controllers/
+  - The real business logic.
+  - Controllers call the DB through the pool from backend/db.js and return JSON.
+  - Example: statisticsController.js runs multiple queries and returns one big JSON payload.
+
+- backend/middleware/
+  - Shared request checks (authentication + authorization).
+  - authenticateToken: verifies JWT and sets req.user
+  - authorizeRole: blocks if user role is not allowed
+
+- backend/models/ and backend/utils/
+  - Shared DB helpers / logic (depends on the feature).
+
+Important backend endpoints (high level):
+
+- Auth
+  - /api/auth/... (login/register/etc)  -> used to get a token + user info
+
+- Statistics (admin/police only)
+  - GET /api/statistics
+  - Returns:
+    - overview counts (crimes, alerts, unresolved complaints, users)
+    - charts: crimesByCategory, crimesBySeverity, crimesLast7Days
+    - trends: daily/weekly/monthly
+    - map: crimesByCity + heatmapPoints (lat/lng)
+
+- Tips workflow
+  - POST /api/tips/report            (authenticated users submit a tip)
+  - GET  /api/tips/pending           (admin/police review queue)
+  - POST /api/tips/:id/approve|deny  (admin/police moderation)
+
+- Crimes + location
+  - /api/crimes/... and /api/location/... support maps, nearby crimes, risk-level, etc.
+
+
+-----------------------
+Frontend (frontend/)
+-----------------------
+
+Goal:
+- React UI that users interact with.
+- Uses React Router for pages.
+- Calls backend APIs using a shared API helper.
+- Hides protected pages behind <ProtectedRoute> (based on JWT + roles).
+
+Key files/folders:
+
+- frontend/src/App.js
+  - Frontend routing map (React Router).
+  - Important routes:
+    - /dashboard       (protected)
+    - /map             (protected)
+    - /statistics      (protected + admin/police)
+    - /tip-moderation  (protected + admin/police)
+    - /admin-panel     (protected + admin)
+
+- frontend/src/pages/
+  - Top-level screens (each route usually maps to a page).
+  - Examples:
+    - Dashboard.js: shows user map + nearby stats; also fetches /statistics for admins/police.
+    - Statistics.js: dedicated stats page (charts + density map).
+    - TipModeration.js: admin/police tip review.
+
+- frontend/src/components/
+  - Reusable UI pieces (Sidebar, Topbar, panels, cards, maps, etc.).
+  - frontend/src/components/statistics/ contains the stats-specific sections:
+    - CrimeTrendSection, CrimeDensityMap, CrimesByCitySection, SevenDayTrendMini, ...
+
+- frontend/src/utils/
+  - Shared helpers.
+  - API helper (axios/fetch wrapper) is used like: API.get('/statistics')
+  - Auth helpers read/write token + role (usually stored in localStorage).
+
+
+-----------------------
+Request/Response Flow (how data moves)
+-----------------------
+
+1) User opens a page in React (example: Statistics page).
+2) The page calls the API helper (example: API.get('/statistics')).
+3) Request goes to backend/app.js -> routed to backend/routes/statRoutes.js.
+4) Middleware runs (authenticateToken + authorizeRole).
+5) Controller runs (backend/controllers/statisticsController.js).
+6) Controller queries the database via backend/db.js and returns JSON.
+7) React receives JSON and renders charts/maps/components.
+
+
+-----------------------
+Where to change things (quick guide)
+-----------------------
+
+- Add/modify an API endpoint:
+  - backend/routes/<feature>Routes.js  (path + middleware)
+  - backend/controllers/<feature>Controller.js (logic + DB queries)
+
+- Change DB connection details:
+  - backend/db.js + .env (DATABASE_URL)
+
+- Add a new page/screen:
+  - frontend/src/pages/<NewPage>.js
+  - add a <Route ...> in frontend/src/App.js
+
+- Update a UI section (cards/maps/charts/sidebar):
+  - frontend/src/components/... (or frontend/src/components/statistics/...)
+
+
+-----------------------
+Notes / assumptions
+-----------------------
+
+- Backend expects environment variables (at least DATABASE_URL, plus any JWT secrets used by auth middleware/controllers).
+- Frontend and backend are typically run separately:
+  - frontend dev server (React) on :3000
+  - backend API server (Express) on :5000
+

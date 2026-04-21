@@ -19,8 +19,15 @@ export default function Sidebar() {
   const menu = [
     { to: '/dashboard', label: 'Dashboard', icon: <Home size={18} /> },
     { to: '/map', label: 'Map', icon: <Map size={18} /> },
-    { to: '/statistics', label: 'Statistics', icon: <BarChart3 size={18} /> },
   ];
+
+  if (role === 'admin' || role === 'police') {
+    menu.push({
+      to: '/statistics',
+      label: 'Statistics',
+      icon: <BarChart3 size={18} />,
+    });
+  }
 
   menu.push({
     to: '/report-tip',

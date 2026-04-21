@@ -1,31 +1,25 @@
 import { useEffect, useState } from 'react';
 import API from '../utils/api';
+import { getUserRole } from '../utils/auth';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
-import StatCard from '../components/StatCard';
 import DashboardMap from '../components/DashboardMap';
-import SafetyAlert from '../components/SafetyAlert';
 import NearbyStats from '../components/NearbyStats';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-} from 'recharts';
+import StatisticsPanel from '../components/StatisticsPanel';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import { AlertCircle, Users, Activity, FileWarning } from 'lucide-react';
 
 // 🔔 SOUND EFFECTS
 const alertSound = new Audio('/alerts/high_alert.mp3');
 alertSound.volume = 0.6;
 
+const canViewStatistics = () => {
+  const role = getUserRole();
+  return role === 'admin' || role === 'police';
+};
+
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(canViewStatistics());
   const [crimes, setCrimes] = useState([]);
   const [userName, setUserName] = useState('User');
   const [userLocation, setUserLocation] = useState(null);
@@ -34,11 +28,32 @@ export default function Dashboard() {
   const [riskPopup, setRiskPopup] = useState(null); // 🔥 NEW UI POPUP
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 📱 mobile sidebar
 
-  // 🧠 Load user info + stats
+  // 🧠 Load user info; statistics API is admin/police only
   useEffect(() => {
     const name = localStorage.getItem('name') || 'User';
     setUserName(name);
-    fetchStats();
+  }, []);
+
+  useEffect(() => {
+    if (!canViewStatistics()) {
+      setStatsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await API.get('/statistics');
+        if (!cancelled) setStats(res.data);
+      } catch (err) {
+        console.error('Error fetching stats', err);
+        if (!cancelled) setStats(null);
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 🧭 Get user location + fetch crimes
@@ -131,16 +146,6 @@ export default function Dashboard() {
     }
   };
 
-  // 📊 Fetch stats
-  const fetchStats = async () => {
-    try {
-      const res = await API.get('/statistics');
-      setStats(res.data);
-    } catch (err) {
-      console.error('Error fetching stats', err);
-    }
-  };
-
   // 🚪 Logout
   const handleLogout = () => {
     localStorage.clear();
@@ -148,17 +153,7 @@ export default function Dashboard() {
     window.location.href = '/login';
   };
 
-  // Chart colors
-  const COLORS = [
-    '#4F46E5',
-    '#22C55E',
-    '#F59E0B',
-    '#EF4444',
-    '#06B6D4',
-    '#9333EA',
-  ];
-
-  if (!stats || loading)
+  if (loading || statsLoading)
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <p className="text-gray-500 text-lg animate-pulse">
@@ -215,91 +210,14 @@ export default function Dashboard() {
 
         {/* Main content scrollable area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 pt-24">
-          {/* 📊 Stats Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-            <StatCard
-              title="Total Crimes"
-              value={stats.overview.totalCrimes}
-              icon={<AlertCircle />}
-              color="bg-red-500"
-            />
-            <StatCard
-              title="Active Alerts"
-              value={stats.overview.activeAlerts}
-              icon={<Activity />}
-              color="bg-yellow-500"
-            />
-            <StatCard
-              title="Unresolved Complaints"
-              value={stats.overview.unresolvedComplaints}
-              icon={<FileWarning />}
-              color="bg-orange-500"
-            />
-            <StatCard
-              title="Total Users"
-              value={stats.overview.totalUsers}
-              icon={<Users />}
-              color="bg-green-500"
-            />
-          </div>
+          {canViewStatistics() && stats && (
+            <StatisticsPanel stats={stats} userLocation={userLocation} />
+          )}
 
-          {/* Charts, DashboardMap, and NearbyStats */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-            {/* Pie Chart Card */}
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md flex flex-col gap-4">
-              <h3 className="text-lg font-semibold text-gray-700">
-                Crimes by Category
-              </h3>
-              <div className="h-64 sm:h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stats.crimesByCategory}
-                      dataKey="count"
-                      nameKey="category"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={110}
-                      innerRadius={55}
-                      paddingAngle={4}
-                      label={({ name, percent }) =>
-                        `${name}: ${(percent * 100).toFixed(1)}%`
-                      }
-                    >
-                      {stats.crimesByCategory.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Risk alert for current location inside card */}
-              {userLocation && <SafetyAlert location={userLocation} />}
-            </div>
-
-            {/* Map + Nearby Stats stacked on larger screens */}
             <DashboardMap />
 
             <NearbyStats location={userLocation} />
-
-            {/* Bar Chart Card */}
-            <div className="bg-white p-4 sm:p-6 rounded-xl shadow-md">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">
-                Crimes by Severity
-              </h3>
-              <div className="h-64 sm:h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.crimesBySeverity}>
-                    <XAxis dataKey="severity" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#6366F1" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
           </div>
 
           {/* Live Crime Map Section */}

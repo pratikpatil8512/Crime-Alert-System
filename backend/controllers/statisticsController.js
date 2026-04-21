@@ -46,7 +46,51 @@ async function getStatistics(req, res) {
       ORDER BY count DESC;
     `);
 
-    // --- 6️⃣ Response Object ---
+    // --- 6️⃣ Crime trend — daily (last 90 days) ---
+    const crimesTrendDaily = await pool.query(`
+      SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') AS period, COUNT(*)::int AS count
+      FROM crime_data
+      WHERE created_at >= NOW() - INTERVAL '90 days'
+      GROUP BY created_at::date
+      ORDER BY period ASC;
+    `);
+
+    // --- 7️⃣ Weekly counts (last ~12 weeks) ---
+    const crimesTrendWeekly = await pool.query(`
+      SELECT
+        TO_CHAR(date_trunc('week', created_at)::date, 'YYYY-MM-DD') AS period,
+        COUNT(*)::int AS count
+      FROM crime_data
+      WHERE created_at >= NOW() - INTERVAL '84 days'
+      GROUP BY date_trunc('week', created_at)
+      ORDER BY date_trunc('week', created_at) ASC;
+    `);
+
+    // --- 8️⃣ Monthly counts (last 24 months) ---
+    const crimesTrendMonthly = await pool.query(`
+      SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS period,
+             COUNT(*)::int AS count
+      FROM crime_data
+      WHERE created_at >= NOW() - INTERVAL '24 months'
+      GROUP BY date_trunc('month', created_at)
+      ORDER BY date_trunc('month', created_at) ASC;
+    `);
+
+    // --- 9️⃣ Points for density / heat-style map (cap for payload size) ---
+    const heatmapPoints = await pool.query(`
+      SELECT
+        ST_Y(location::geometry)::double precision AS latitude,
+        ST_X(location::geometry)::double precision AS longitude,
+        severity::text AS severity,
+        category,
+        TO_CHAR(created_at::date, 'YYYY-MM-DD') AS date
+      FROM crime_data
+      WHERE location IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1200;
+    `);
+
+    // --- Response Object ---
     const stats = {
       overview: {
         totalCrimes: totalCrimes.rows[0].count,
@@ -57,7 +101,11 @@ async function getStatistics(req, res) {
       crimesByCategory: crimesByCategory.rows,
       crimesBySeverity: crimesBySeverity.rows,
       crimesLast7Days: crimesLast7Days.rows,
-      crimesByCity: crimesByCity.rows
+      crimesByCity: crimesByCity.rows,
+      crimesTrendDaily: crimesTrendDaily.rows,
+      crimesTrendWeekly: crimesTrendWeekly.rows,
+      crimesTrendMonthly: crimesTrendMonthly.rows,
+      heatmapPoints: heatmapPoints.rows
     };
 
     return res.json(stats);
