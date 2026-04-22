@@ -10,8 +10,54 @@ const pool = require('../db');                                                 /
 const {
   createCrime,
   getNearbyCrimes,
-  getHeatmap
+  getHeatmap,
+  listCrimes,
+  getCrimeById,
+  patchCrime,
+  bulkPatchCrimes,
+  addCrimeNote,
+  bulkAddCrimeNote,
+  archiveCrime,
+  restoreCrime,
+  bulkArchiveCrimes,
+  bulkRestoreCrimes,
 } = require('../controllers/crimeController'); // 📌 from crimeController.js
+
+/**
+ * 🧭 MANAGEMENT: List crimes (Police/Admin)
+ * Supports filters + pagination.
+ */
+router.get(
+  '/',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  listCrimes
+);
+
+/**
+ * 👮 MANAGEMENT: List police users for assignment (Police/Admin)
+ */
+router.get(
+  '/police-users',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  async (req, res) => {
+    try {
+      const q = `
+        SELECT id, name, email, phone
+        FROM users
+        WHERE role = 'police'
+        ORDER BY name ASC
+        LIMIT 500;
+      `;
+      const { rows } = await pool.query(q);
+      return res.json(rows);
+    } catch (err) {
+      console.error('❌ Error fetching police users:', err);
+      return res.status(500).json({ error: 'Failed to fetch police users' });
+    }
+  }
+);
 
 /**
  * 🚔 CREATE CRIME REPORT (Restricted to Police/Admin)
@@ -29,6 +75,34 @@ router.post(
  * Radius default = 3000m unless overwritten by query param
  */
 router.get('/nearby', authenticateToken, getNearbyCrimes);
+
+/**
+ * 🧺 MANAGEMENT: Bulk operations (Police/Admin)
+ */
+router.post(
+  '/bulk',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  bulkPatchCrimes
+);
+router.post(
+  '/bulk/notes',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  bulkAddCrimeNote
+);
+router.post(
+  '/bulk/archive',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  bulkArchiveCrimes
+);
+router.post(
+  '/bulk/restore',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  bulkRestoreCrimes
+);
 
 /**
  * 📊 GET CATEGORY-WISE CRIME COUNT WITHIN 5KM
@@ -100,5 +174,52 @@ router.get('/risk-level', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to calculate risk level.' });
   }
 });
+
+/**
+ * 🧾 MANAGEMENT: Crime detail (Police/Admin)
+ * Keep these routes AFTER static routes like /risk-level to avoid collisions.
+ */
+router.get(
+  '/:id',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  getCrimeById
+);
+
+/**
+ * ✍️ MANAGEMENT: Patch crime fields (Police/Admin)
+ */
+router.patch(
+  '/:id',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  patchCrime
+);
+
+/**
+ * ✍️ MANAGEMENT: Add note to a crime (Police/Admin)
+ */
+router.post(
+  '/:id/notes',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  addCrimeNote
+);
+
+/**
+ * 🗃️ MANAGEMENT: Archive/Restore single crime (Police/Admin)
+ */
+router.post(
+  '/:id/archive',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  archiveCrime
+);
+router.post(
+  '/:id/restore',
+  authenticateToken,
+  authorizeRole('admin', 'police'),
+  restoreCrime
+);
 
 module.exports = router;
