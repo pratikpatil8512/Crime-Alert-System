@@ -32,6 +32,10 @@ function classNames(...xs) {
   return xs.filter(Boolean).join(' ');
 }
 
+function getStatusLabel(status) {
+  return STATUS_OPTIONS.find((option) => option.value === status)?.label || status;
+}
+
 function toCsv(rows) {
   const header = [
     'id',
@@ -109,6 +113,7 @@ export default function ManageCrimesContent() {
   const [noteModal, setNoteModal] = useState({ open: false, note: '' });
   const [archiveModal, setArchiveModal] = useState({ open: false, reason: '' });
   const [undo, setUndo] = useState(null); // { ids: string[], expiresAt: number }
+  const [savingStatusId, setSavingStatusId] = useState(null);
 
   const debounceRef = useRef(null);
   const searchRef = useRef(null);
@@ -230,6 +235,21 @@ export default function ManageCrimesContent() {
   };
 
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
+
+  const updateCrimeStatus = async (crimeId, nextStatus) => {
+    if (!crimeId || !nextStatus) return;
+    setSavingStatusId(crimeId);
+    try {
+      await API.patch(`/crimes/${crimeId}`, { status: nextStatus });
+      await fetchList(listParams);
+      if (drawerCrimeId === crimeId) await openDrawer(crimeId);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update case status.');
+    } finally {
+      setSavingStatusId(null);
+    }
+  };
 
   const bulkPatch = async (patch) => {
     if (!selectedIds.length) return;
@@ -555,25 +575,29 @@ export default function ManageCrimesContent() {
                       <td className="py-2 px-4">{crime.city || '—'}</td>
                       <td className="py-2 px-4 capitalize">{crime.category || '—'}</td>
                       <td className="py-2 px-4 capitalize">{crime.severity || '—'}</td>
-                      <td className="py-2 px-4 capitalize">
-                        <span
+                      <td className="py-2 px-4">
+                        <select
+                          value={crime.status}
+                          disabled={archived || savingStatusId === crime.id}
+                          onChange={(e) => updateCrimeStatus(crime.id, e.target.value)}
                           className={classNames(
-                            'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border',
+                            'min-w-[140px] rounded-lg border px-2.5 py-1.5 text-xs font-semibold bg-white focus:ring-2 focus:ring-indigo-500',
                             crime.status === 'resolved'
                               ? 'bg-green-50 text-green-700 border-green-200'
                               : crime.status === 'unresolved'
                                 ? 'bg-red-50 text-red-700 border-red-200'
-                              : crime.status === 'in_progress'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : crime.status === 'verified'
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                  : crime.status === 'dismissed'
-                                    ? 'bg-gray-50 text-gray-700 border-gray-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
                           )}
                         >
-                          {STATUS_OPTIONS.find((s) => s.value === crime.status)?.label || crime.status}
-                        </span>
+                          {!STATUS_OPTIONS.some((s) => s.value === crime.status) && (
+                            <option value={crime.status}>{getStatusLabel(crime.status)}</option>
+                          )}
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s.value} value={s.value}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-2 px-4">
                         {crime.assigned_to ? (
@@ -915,7 +939,23 @@ export default function ManageCrimesContent() {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="bg-gray-50 rounded-xl p-3 border">
                         <div className="text-xs text-gray-500">Status</div>
-                        <div className="font-semibold capitalize">{drawerData.crime.status}</div>
+                        <select
+                          value={drawerData.crime.status}
+                          disabled={Boolean(drawerData.crime.archived_at) || savingStatusId === drawerData.crime.id}
+                          onChange={(e) => updateCrimeStatus(drawerData.crime.id, e.target.value)}
+                          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-semibold bg-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {!STATUS_OPTIONS.some((s) => s.value === drawerData.crime.status) && (
+                            <option value={drawerData.crime.status}>
+                              {getStatusLabel(drawerData.crime.status)}
+                            </option>
+                          )}
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s.value} value={s.value}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="bg-gray-50 rounded-xl p-3 border">
                         <div className="text-xs text-gray-500">Severity</div>
