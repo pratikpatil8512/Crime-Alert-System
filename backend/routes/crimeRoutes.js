@@ -11,6 +11,7 @@ const {
   createCrime,
   getNearbyCrimes,
   getHeatmap,
+  getRiskLevel,
   listCrimes,
   getCrimeById,
   patchCrime,
@@ -117,7 +118,8 @@ router.get('/nearby/stats', authenticateToken, async (req, res) => {
     const query = `
       SELECT category, COUNT(*) AS count
       FROM crime_data
-      WHERE ST_DWithin(
+      WHERE archived_at IS NULL
+        AND ST_DWithin(
         location::geography,
         ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
         5000
@@ -140,40 +142,10 @@ router.get('/nearby/stats', authenticateToken, async (req, res) => {
 router.get('/heatmap', authenticateToken, getHeatmap);
 
 /**
- * 🚨 RISK LEVEL CHECK (1 KM RADIUS ALERT SYSTEM)
- * Returns safety level message: safe | moderate | high
+ * 🚨 RISK LEVEL CHECK
+ * Weighted severity-based alert for the last 7 days across supported radii.
  */
-router.get('/risk-level', authenticateToken, async (req, res) => {
-  try {
-    const { lat, lng } = req.query;
-    if (!lat || !lng) {
-      return res.status(400).json({ error: 'Location required.' });
-    }
-
-    const query = `
-      SELECT COUNT(*) AS count
-      FROM crime_data
-      WHERE ST_DWithin(
-        location::geography,
-        ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
-        1000 -- 1 KM radius
-      );
-    `;
-
-    const result = await pool.query(query, [lng, lat]);
-    const crimeCount = parseInt(result.rows[0].count);
-
-    // Apply threshold logic
-    let risk = 'safe';
-    if (crimeCount >= 3 && crimeCount <= 6) risk = 'moderate';
-    if (crimeCount >= 7) risk = 'high';
-
-    res.json({ risk, crimeCount });
-  } catch (err) {
-    console.error('❌ Risk check error:', err);
-    res.status(500).json({ error: 'Failed to calculate risk level.' });
-  }
-});
+router.get('/risk-level', authenticateToken, getRiskLevel);
 
 /**
  * 🧾 MANAGEMENT: Crime detail (Police/Admin)

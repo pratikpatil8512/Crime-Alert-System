@@ -69,6 +69,7 @@ export default function CrimeMap() {
 
   const filteredCrimes = crimes.filter((crime) => {
     return (
+      !crime.archived_at &&
       (filters.severity === 'all' || crime.severity === filters.severity) &&
       (filters.category === 'all' || crime.category === filters.category)
     );

@@ -818,7 +818,7 @@ export default function ManageCrimesContent() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900">Delete selected cases</h3>
+                <h3 className="text-lg font-bold text-gray-900">Archive selected cases</h3>
                 <button
                   type="button"
                   onClick={() => setArchiveModal({ open: false, reason: '' })}
@@ -828,7 +828,7 @@ export default function ManageCrimesContent() {
                 </button>
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                This is a soft delete. Deleted cases are moved to Archived and can be restored later.
+                Archived cases are moved to Archived and can be restored later.
               </p>
               <input
                 value={archiveModal.reason}
@@ -852,7 +852,7 @@ export default function ManageCrimesContent() {
                   }}
                   className="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold shadow inline-flex items-center gap-2"
                 >
-                  <Archive size={16} /> Delete
+                  <Archive size={16} /> Archive
                 </button>
               </div>
             </motion.div>

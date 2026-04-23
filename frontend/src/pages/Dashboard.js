@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
 import DashboardMap from '../components/DashboardMap';
 import NearbyStats from '../components/NearbyStats';
+import SafetyAlert from '../components/SafetyAlert';
 import StatisticsPanel from '../components/StatisticsPanel';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 
@@ -109,17 +110,13 @@ export default function Dashboard() {
   // 📍 Risk Level Logic (New)
   const checkRiskLevel = async (lat, lng) => {
     try {
-      const res = await API.get(`/crimes/risk-level?lat=${lat}&lng=${lng}`);
-      const { risk, crimeCount } = res.data;
+      const res = await API.get(`/crimes/risk-level?lat=${lat}&lng=${lng}&radius=5000`);
+      const { risk, crimeCount, alertMessage, timeWindowDays, radiusKm } = res.data;
 
-      // Create popup UI message
-      const messages = {
-        safe: `🟢 Safe Zone — Only ${crimeCount} incidents nearby.`,
-        moderate: `⚠ Moderate Risk — ${crimeCount} crimes reported close.`,
-        high: `🚨 HIGH RISK WARNING — ${crimeCount} crime incidents detected near your location.`,
-      };
-
-      setRiskPopup({ risk, message: messages[risk] });
+      setRiskPopup({
+        risk,
+        message: `${alertMessage} ${crimeCount} incidents reported in the last ${timeWindowDays || 7} days within ${radiusKm || 5} km.`,
+      });
 
       // 🔥 Play alert sound only for high risk
       if (risk === 'high') {
@@ -210,6 +207,8 @@ export default function Dashboard() {
 
         {/* Main content scrollable area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 pt-24">
+          {userLocation && <SafetyAlert location={userLocation} />}
+
           {canViewStatistics() && stats && (
             <StatisticsPanel stats={stats} userLocation={userLocation} />
           )}
@@ -249,7 +248,7 @@ export default function Dashboard() {
               )}
 
               {/* Crime Markers */}
-              {crimes.map((crime, idx) => (
+              {crimes.filter((crime) => !crime.archived_at).map((crime, idx) => (
                 <CircleMarker
                   key={idx}
                   center={[crime.latitude, crime.longitude]}

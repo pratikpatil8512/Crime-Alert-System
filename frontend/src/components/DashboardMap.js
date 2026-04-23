@@ -162,7 +162,7 @@ export default function DashboardMap() {
           )}
 
           {/* 🔴 Crime markers */}
-          {crimes.map((crime) => (
+          {crimes.filter((crime) => !crime.archived_at).map((crime) => (
             <Marker
               key={crime.id}
               position={[crime.latitude, crime.longitude]}

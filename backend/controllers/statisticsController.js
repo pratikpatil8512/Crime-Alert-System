@@ -4,7 +4,9 @@ const pool = require('../db');
 async function getStatistics(req, res) {
   try {
     // --- 1️⃣ Overview Counters ---
-    const totalCrimes = await pool.query('SELECT COUNT(*)::int AS count FROM crime_data');
+    const totalCrimes = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM crime_data WHERE archived_at IS NULL'
+    );
     const totalAlerts = await pool.query('SELECT COUNT(*)::int AS count FROM alert');
     const unresolvedComplaints = await pool.query(
       "SELECT COUNT(*)::int AS count FROM complaint WHERE status IS DISTINCT FROM 'resolved'"
@@ -15,6 +17,7 @@ async function getStatistics(req, res) {
     const crimesByCategory = await pool.query(`
       SELECT category, COUNT(*)::int AS count
       FROM crime_data
+      WHERE archived_at IS NULL
       GROUP BY category
       ORDER BY count DESC
       LIMIT 10;
@@ -24,6 +27,7 @@ async function getStatistics(req, res) {
     const crimesBySeverity = await pool.query(`
       SELECT severity, COUNT(*)::int AS count
       FROM crime_data
+      WHERE archived_at IS NULL
       GROUP BY severity
       ORDER BY severity;
     `);
@@ -32,7 +36,8 @@ async function getStatistics(req, res) {
     const crimesLast7Days = await pool.query(`
       SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
       FROM crime_data
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE archived_at IS NULL
+        AND created_at >= NOW() - INTERVAL '7 days'
       GROUP BY created_at::date
       ORDER BY date ASC;
     `);
@@ -41,7 +46,8 @@ async function getStatistics(req, res) {
     const crimesByCity = await pool.query(`
       SELECT city, COUNT(*)::int AS count
       FROM crime_data
-      WHERE city IS NOT NULL
+      WHERE archived_at IS NULL
+        AND city IS NOT NULL
       GROUP BY city
       ORDER BY count DESC;
     `);
@@ -50,7 +56,8 @@ async function getStatistics(req, res) {
     const crimesTrendDaily = await pool.query(`
       SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') AS period, COUNT(*)::int AS count
       FROM crime_data
-      WHERE created_at >= NOW() - INTERVAL '90 days'
+      WHERE archived_at IS NULL
+        AND created_at >= NOW() - INTERVAL '90 days'
       GROUP BY created_at::date
       ORDER BY period ASC;
     `);
@@ -61,7 +68,8 @@ async function getStatistics(req, res) {
         TO_CHAR(date_trunc('week', created_at)::date, 'YYYY-MM-DD') AS period,
         COUNT(*)::int AS count
       FROM crime_data
-      WHERE created_at >= NOW() - INTERVAL '84 days'
+      WHERE archived_at IS NULL
+        AND created_at >= NOW() - INTERVAL '84 days'
       GROUP BY date_trunc('week', created_at)
       ORDER BY date_trunc('week', created_at) ASC;
     `);
@@ -71,7 +79,8 @@ async function getStatistics(req, res) {
       SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS period,
              COUNT(*)::int AS count
       FROM crime_data
-      WHERE created_at >= NOW() - INTERVAL '24 months'
+      WHERE archived_at IS NULL
+        AND created_at >= NOW() - INTERVAL '24 months'
       GROUP BY date_trunc('month', created_at)
       ORDER BY date_trunc('month', created_at) ASC;
     `);
@@ -85,7 +94,8 @@ async function getStatistics(req, res) {
         category,
         TO_CHAR(created_at::date, 'YYYY-MM-DD') AS date
       FROM crime_data
-      WHERE location IS NOT NULL
+      WHERE archived_at IS NULL
+        AND location IS NOT NULL
       ORDER BY created_at DESC
       LIMIT 1200;
     `);

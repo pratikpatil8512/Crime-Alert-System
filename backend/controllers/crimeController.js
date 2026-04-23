@@ -4,6 +4,56 @@ const { v4: uuidv4 } = require('uuid');
 
 const CRIME_STATUS = new Set(['reported', 'verified', 'in_progress', 'resolved', 'dismissed']);
 const CRIME_SEVERITY = new Set(['minor', 'moderate', 'critical']);
+const RISK_RADIUS_THRESHOLDS = {
+  5000: { lowMax: 20, moderateMax: 50 },
+  10000: { lowMax: 40, moderateMax: 100 },
+  20000: { lowMax: 80, moderateMax: 200 },
+};
+
+function normalizeRiskRadius(rawRadius) {
+  const parsed = parseInt(rawRadius || '5000', 10);
+  if (parsed === 10000 || parsed === 20000) return parsed;
+  return 5000;
+}
+
+function formatCategoryLabel(category) {
+  return String(category || 'other')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getRiskBand(score, radius) {
+  const thresholds = RISK_RADIUS_THRESHOLDS[radius] || RISK_RADIUS_THRESHOLDS[5000];
+  if (score <= thresholds.lowMax) return 'safe';
+  if (score <= thresholds.moderateMax) return 'moderate';
+  return 'high';
+}
+
+function buildRiskMessage({ risk, dominantCategory, dominantCategoryShare, dominantCategoryScore }) {
+  const hasDominantCategory =
+    risk !== 'safe' &&
+    dominantCategory &&
+    dominantCategoryScore > 0 &&
+    dominantCategoryShare > 0.4;
+
+  if (risk === 'high') {
+    if (hasDominantCategory) {
+      return `High Risk Zone due to ${formatCategoryLabel(dominantCategory)} \uD83D\uDEA8`;
+    }
+    return 'High Risk Area \uD83D\uDEA8';
+  }
+
+  if (risk === 'moderate') {
+    if (hasDominantCategory) {
+      return `Moderate Risk due to ${formatCategoryLabel(dominantCategory)} \u26A0\uFE0F`;
+    }
+    return 'Moderate Risk Area \u26A0\uFE0F';
+  }
+
+  return 'Low Risk Area \uD83D\uDFE2';
+}
 
 async function logActivity(client, { crimeId, actorId, action, details }) {
   await client.query(
@@ -582,7 +632,8 @@ async function getNearbyCrimes(req, res) {
              ST_Y(location::geometry) AS latitude,
              incident_time, created_at
       FROM crime_data
-      WHERE ST_DWithin(location, ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
+      WHERE archived_at IS NULL
+        AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
       ORDER BY incident_time DESC
       LIMIT 1000;
     `;
@@ -618,7 +669,8 @@ async function getHeatmap(req, res) {
       FROM (
         SELECT ST_SnapToGrid(location::geometry, 0.002, 0.002) AS geom, COUNT(*) AS cnt
         FROM crime_data
-        WHERE ST_DWithin(location, ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
+        WHERE archived_at IS NULL
+          AND ST_DWithin(location, ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, $3)
           AND created_at >= NOW() - ($4 || ' hours')::interval
         GROUP BY ST_SnapToGrid(location::geometry, 0.002, 0.002)
       ) grid
@@ -635,10 +687,128 @@ async function getHeatmap(req, res) {
   }
 }
 
+/**
+ * GET /api/crimes/risk-level
+ * Returns weighted risk within a supported radius for the last 7 days.
+ * Query params: lat, lng, radius (5000 | 10000 | 20000)
+ */
+async function getRiskLevel(req, res) {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const radius = normalizeRiskRadius(req.query.radius);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({ error: 'lat and lng required' });
+    }
+
+    const q = `
+      WITH filtered AS (
+        SELECT
+          category,
+          severity,
+          CASE
+            WHEN severity = 'minor' THEN 1
+            WHEN severity = 'moderate' THEN 2
+            WHEN severity = 'critical' THEN 3
+            ELSE 0
+          END AS severity_weight
+        FROM crime_data
+        WHERE archived_at IS NULL
+          AND ST_DWithin(
+          location::geography,
+          ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
+          $3
+        )
+          AND created_at >= NOW() - INTERVAL '7 days'
+      ),
+      totals AS (
+        SELECT
+          COUNT(*)::int AS crime_count,
+          COALESCE(SUM(severity_weight), 0)::int AS overall_score
+        FROM filtered
+      ),
+      category_scores AS (
+        SELECT
+          COALESCE(NULLIF(TRIM(category), ''), 'other') AS category,
+          COUNT(*)::int AS total_cases,
+          COALESCE(SUM(severity_weight), 0)::int AS category_score
+        FROM filtered
+        GROUP BY COALESCE(NULLIF(TRIM(category), ''), 'other')
+      )
+      SELECT
+        t.crime_count,
+        t.overall_score,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'category', c.category,
+              'totalCases', c.total_cases,
+              'categoryScore', c.category_score
+            )
+            ORDER BY c.category_score DESC, c.total_cases DESC, c.category ASC
+          ) FILTER (WHERE c.category IS NOT NULL),
+          '[]'::json
+        ) AS category_breakdown
+      FROM totals t
+      LEFT JOIN category_scores c ON TRUE
+      GROUP BY t.crime_count, t.overall_score;
+    `;
+
+    const { rows } = await pool.query(q, [lng, lat, radius]);
+    const result = rows[0] || {
+      crime_count: 0,
+      overall_score: 0,
+      category_breakdown: [],
+    };
+
+    const crimeCount = Number(result.crime_count || 0);
+    const overallScore = Number(result.overall_score || 0);
+    const categoryBreakdown = Array.isArray(result.category_breakdown)
+      ? result.category_breakdown.map((item) => ({
+          category: item.category,
+          totalCases: Number(item.totalCases || item.totalcases || 0),
+          categoryScore: Number(item.categoryScore || item.categoryscore || 0),
+        }))
+      : [];
+
+    const dominantCategoryEntry = categoryBreakdown[0] || null;
+    const dominantCategory = dominantCategoryEntry?.category || null;
+    const dominantCategoryScore = dominantCategoryEntry?.categoryScore || 0;
+    const dominantCategoryShare = overallScore > 0 ? dominantCategoryScore / overallScore : 0;
+    const risk = getRiskBand(overallScore, radius);
+    const alertMessage = buildRiskMessage({
+      risk,
+      dominantCategory,
+      dominantCategoryShare,
+      dominantCategoryScore,
+    });
+
+    return res.json({
+      risk,
+      radius,
+      radiusKm: radius / 1000,
+      timeWindowDays: 7,
+      crimeCount,
+      overallScore,
+      alertMessage,
+      dominantCategory,
+      dominantCategoryLabel: dominantCategory ? formatCategoryLabel(dominantCategory) : null,
+      dominantCategoryScore,
+      dominantCategoryShare,
+      categoryBreakdown,
+    });
+  } catch (err) {
+    console.error('getRiskLevel error', err);
+    return res.status(500).json({ error: 'Failed to calculate risk level.' });
+  }
+}
+
 module.exports = {
   createCrime,
   getNearbyCrimes,
   getHeatmap,
+  getRiskLevel,
   listCrimes,
   getCrimeById,
   patchCrime,
