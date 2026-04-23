@@ -154,6 +154,44 @@ exports.getPendingTips = async (req, res) => {
 };
 
 /* ---------------------------------------------------------
+   2.5) GET CURRENT USER'S TIPS
+--------------------------------------------------------- */
+exports.getMyTips = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      return res.status(401).json({ error: "Login required" });
+    }
+
+    const q = `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.category,
+        t.severity,
+        t.status,
+        t.reported_at,
+        t.created_at,
+        t.moderator_notes,
+        t.moderated_at,
+        t.crime_id,
+        ST_Y(t.location::geometry) AS latitude,
+        ST_X(t.location::geometry) AS longitude
+      FROM anonymous_tips t
+      WHERE t.reporter_id = $1
+      ORDER BY t.reported_at DESC, t.created_at DESC;
+    `;
+
+    const { rows } = await pool.query(q, [user.id]);
+    return res.json(rows);
+  } catch (err) {
+    console.error("getMyTips error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+/* ---------------------------------------------------------
    3) APPROVE TIP
 --------------------------------------------------------- */
 exports.approveTip = async (req, res) => {

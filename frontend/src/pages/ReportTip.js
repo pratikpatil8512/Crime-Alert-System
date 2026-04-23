@@ -38,8 +38,8 @@ export default function ReportTip() {
         longitude: loc.longitude
       };
       await API.post('/tips/report', payload);
-      alert('Tip submitted. Authorities will review it.');
-      navigate('/dashboard');
+      alert('Tip submitted successfully.');
+      navigate('/');
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || 'Failed to submit tip');

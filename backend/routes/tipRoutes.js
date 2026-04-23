@@ -17,6 +17,13 @@ router.get(
   controller.getPendingTips
 );
 
+// Current user: fetch own submitted tips
+router.get(
+  "/mine",
+  authenticateToken,
+  controller.getMyTips
+);
+
 // Admin/Police: approve tip
 router.post(
   "/:id/approve",

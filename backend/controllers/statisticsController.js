@@ -8,8 +8,8 @@ async function getStatistics(req, res) {
       'SELECT COUNT(*)::int AS count FROM crime_data WHERE archived_at IS NULL'
     );
     const totalAlerts = await pool.query('SELECT COUNT(*)::int AS count FROM alert');
-    const unresolvedComplaints = await pool.query(
-      "SELECT COUNT(*)::int AS count FROM complaint WHERE status IS DISTINCT FROM 'resolved'"
+    const resolvedCases = await pool.query(
+      "SELECT COUNT(*)::int AS count FROM crime_data WHERE archived_at IS NULL AND status = 'resolved'"
     );
     const totalUsers = await pool.query('SELECT COUNT(*)::int AS count FROM users');
 
@@ -105,7 +105,7 @@ async function getStatistics(req, res) {
       overview: {
         totalCrimes: totalCrimes.rows[0].count,
         activeAlerts: totalAlerts.rows[0].count,
-        unresolvedComplaints: unresolvedComplaints.rows[0].count,
+        resolvedCases: resolvedCases.rows[0].count,
         totalUsers: totalUsers.rows[0].count
       },
       crimesByCategory: crimesByCategory.rows,

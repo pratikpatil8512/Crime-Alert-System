@@ -41,10 +41,10 @@ export default function StatisticsPanel({ stats, userLocation }) {
           color="bg-yellow-500"
         />
         <StatCard
-          title="Unresolved Complaints"
-          value={stats.overview.unresolvedComplaints}
+          title="Resolved Cases"
+          value={stats.overview.resolvedCases}
           icon={<FileWarning />}
-          color="bg-orange-500"
+          color="bg-emerald-500"
         />
         <StatCard
           title="Total Users"

@@ -8,6 +8,17 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'crime_status') THEN
+    BEGIN
+      ALTER TYPE crime_status ADD VALUE IF NOT EXISTS 'unresolved';
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
+
 -- 1) Extend crime_data
 ALTER TABLE crime_data
   ADD COLUMN IF NOT EXISTS assigned_to uuid REFERENCES users(id) ON DELETE SET NULL;

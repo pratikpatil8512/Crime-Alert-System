@@ -119,9 +119,10 @@ export default function Register() {
           >
             <option value="tourist">Tourist</option>
             <option value="citizen">Citizen</option>
-            <option value="police">Police</option>
-            <option value="admin">Admin</option>
           </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Public signup is limited to tourist or citizen accounts.
+          </p>
         </div>
 
         <Button text="Register" onClick={handleSubmit} loading={loading} />

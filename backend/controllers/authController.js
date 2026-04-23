@@ -16,10 +16,13 @@ const {
 const sendOtpEmail = require('../utils/email');
 require('dotenv').config();
 
+const SELF_SIGNUP_ROLES = new Set(['tourist', 'citizen']);
+
 // ------------------ Registration with OTP logic ------------------
 // ------------------ Registration with OTP logic ------------------
 const register = async (req, res) => {
   const { name, email, password, role = 'tourist', phone, dob } = req.body;
+  const normalizedRole = SELF_SIGNUP_ROLES.has(role) ? role : 'tourist';
 
   if (!name || !email || !password || !phone || !dob) {
     return res.status(400).json({ error: 'name, email, password, phone and dob are required' });
@@ -73,7 +76,7 @@ const register = async (req, res) => {
     const note = `NOTE: You have 3 attempts.\nThe OTP is valid for 10 minutes.`
 
     // Save user
-    await createUser(name, email, plainPassword, role, phone, otp, otpExpiry, dob);
+    await createUser(name, email, plainPassword, normalizedRole, phone, otp, otpExpiry, dob);
 
     // FIXED: notecd → note
     await sendOtpEmail(email, `${content}\n\n${otp}\n\n${note}`);

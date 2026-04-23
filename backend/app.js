@@ -14,6 +14,8 @@ const authRoutes = require('./routes/authRoutes');
 const statRoutes = require('./routes/statRoutes');
 const crimeRoutes = require('./routes/crimeRoutes');
 const locationRoutes = require('./routes/locationRoutes');
+const adminUserRoutes = require('./routes/adminUserRoutes');
+const helpAlertRoutes = require('./routes/helpAlertRoutes');
 
 // --------- MIDDLEWARES -------------
 app.use(cors({
@@ -36,6 +38,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api', statRoutes);
 app.use('/api/crimes', crimeRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/admin', adminUserRoutes);
+app.use('/api/alerts', helpAlertRoutes);
 
 // --------- TEST PROTECTED ROUTE ----
 app.get('/api/protected', authenticateToken, (req, res) => {

@@ -18,10 +18,8 @@ import API from '../utils/api';
 
 const STATUS_OPTIONS = [
   { value: 'reported', label: 'Reported' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'in_progress', label: 'In Progress' },
+  { value: 'unresolved', label: 'Unresolved' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'dismissed', label: 'Dismissed' },
 ];
 
 const SEVERITY_OPTIONS = [
@@ -563,6 +561,8 @@ export default function ManageCrimesContent() {
                             'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border',
                             crime.status === 'resolved'
                               ? 'bg-green-50 text-green-700 border-green-200'
+                              : crime.status === 'unresolved'
+                                ? 'bg-red-50 text-red-700 border-red-200'
                               : crime.status === 'in_progress'
                                 ? 'bg-blue-50 text-blue-700 border-blue-200'
                                 : crime.status === 'verified'

@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_users_location ON users USING GIST (current_locat
 -- crime table
 
 CREATE TYPE crime_severity AS ENUM ('minor','moderate','critical');
-CREATE TYPE crime_status AS ENUM ('reported','verified','in_progress','resolved','dismissed');
+CREATE TYPE crime_status AS ENUM ('reported','unresolved','resolved');
 
 CREATE TABLE crime_data (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -2,7 +2,15 @@
 const pool = require('../db');
 const { v4: uuidv4 } = require('uuid');
 
-const CRIME_STATUS = new Set(['reported', 'verified', 'in_progress', 'resolved', 'dismissed']);
+const CRIME_STATUS = new Set([
+  'reported',
+  'unresolved',
+  'resolved',
+  // Legacy statuses kept for backward compatibility with existing records.
+  'verified',
+  'in_progress',
+  'dismissed',
+]);
 const CRIME_SEVERITY = new Set(['minor', 'moderate', 'critical']);
 const RISK_RADIUS_THRESHOLDS = {
   5000: { lowMax: 20, moderateMax: 50 },

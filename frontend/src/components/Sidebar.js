@@ -1,25 +1,68 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { getUserRole, getUserName, logoutUser } from '../utils/auth';
+import API from '../utils/api';
 import {
-  BarChart3,
-  Map,
-  LogOut,
-  Home,
-  Shield,
   AlertCircle,
+  BarChart3,
+  FileText,
+  Home,
+  LifeBuoy,
+  PhoneCall,
+  LogOut,
+  Map,
   Settings,
+  Shield,
 } from 'lucide-react';
 
 export default function Sidebar() {
   const role = getUserRole();
   const name = getUserName();
   const location = useLocation();
+  const [activeHelpCount, setActiveHelpCount] = useState(0);
 
-  // 🎯 Base menu items
+  useEffect(() => {
+    if (role !== 'admin' && role !== 'police') return undefined;
+
+    let cancelled = false;
+
+    const loadHelpCount = async () => {
+      try {
+        const res = await API.get('/alerts/help');
+        if (cancelled) return;
+        const count = (res.data || []).filter((item) => item.active).length;
+        setActiveHelpCount(count);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load active help request count:', err);
+        }
+      }
+    };
+
+    loadHelpCount();
+    const interval = window.setInterval(loadHelpCount, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [role]);
+
   const menu = [
     { to: '/dashboard', label: 'Dashboard', icon: <Home size={18} /> },
     { to: '/map', label: 'Map', icon: <Map size={18} /> },
+    { to: '/emergency', label: 'Emergency', icon: <PhoneCall size={18} /> },
+    { to: '/report-tip', label: 'Report Tip', icon: <AlertCircle size={18} /> },
+    { to: '/my-reports', label: 'My Reports', icon: <FileText size={18} /> },
   ];
+
+  if (role === 'tourist' || role === 'citizen') {
+    menu.push({
+      to: '/need-help',
+      label: 'Need Help',
+      icon: <LifeBuoy size={18} />,
+    });
+  }
 
   if (role === 'admin' || role === 'police') {
     menu.push({
@@ -27,15 +70,15 @@ export default function Sidebar() {
       label: 'Statistics',
       icon: <BarChart3 size={18} />,
     });
+    menu.push({
+      to: '/help-requests',
+      label: 'Help Requests',
+      icon: <LifeBuoy size={18} />,
+      badge: activeHelpCount,
+      urgent: activeHelpCount > 0,
+    });
   }
 
-  menu.push({
-    to: '/report-tip',
-    label: 'Report Tip',
-    icon: <AlertCircle size={18} />,
-  });
-
-  // 👮 Police/Admin exclusive
   if (role === 'police' || role === 'admin') {
     menu.push({
       to: '/manage-crimes',
@@ -52,7 +95,6 @@ export default function Sidebar() {
     });
   }
 
-  // 👑 Admin exclusive
   if (role === 'admin') {
     menu.push({
       to: '/admin-panel',
@@ -61,58 +103,63 @@ export default function Sidebar() {
     });
   }
 
-  // 👤 Citizen/Tourist menu
   if (role === 'admin' || role === 'police') {
     menu.push({
       to: '/report',
       label: 'Report Crime',
-      icon: <AlertCircle />,
+      icon: <AlertCircle size={18} />,
     });
   }
 
   return (
     <div className="w-full md:w-64 h-full md:h-screen bg-indigo-700 text-white flex flex-col justify-between shadow-xl">
-      {/* Top Section */}
       <div>
-        {/* 🚨 App Branding */}
         <div className="p-5 text-2xl font-bold border-b border-indigo-500 tracking-wide flex items-center space-x-2">
-          <span>🚨</span>
           <span>Crime Alert</span>
         </div>
 
-        {/* 👤 User Info */}
         <div className="p-5 border-b border-indigo-500 bg-indigo-800/60">
-          <p className="text-lg font-semibold truncate">
-            {name || 'Guest User'}
-          </p>
-          <p className="text-indigo-200 text-sm capitalize mt-1">
-            {role || 'guest'}
-          </p>
+          <p className="text-lg font-semibold truncate">{name || 'Guest User'}</p>
+          <p className="text-indigo-200 text-sm capitalize mt-1">{role || 'guest'}</p>
         </div>
 
-        {/* 📋 Navigation Menu */}
         <nav className="mt-4 space-y-1">
           {menu.map((item) => {
             const isActive = location.pathname === item.to;
+            const isUrgent = Boolean(item.urgent);
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 className={`flex items-center space-x-3 py-2.5 px-6 text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-indigo-600 text-white'
+                    ? isUrgent
+                      ? 'bg-red-600 text-white shadow-lg shadow-red-900/20'
+                      : 'bg-indigo-600 text-white'
+                    : isUrgent
+                    ? 'bg-red-500/15 text-white ring-1 ring-red-300/40 hover:bg-red-500/25'
                     : 'text-indigo-100 hover:bg-indigo-600 hover:text-white'
                 }`}
               >
-                <span className="text-indigo-100">{item.icon}</span>
-                <span>{item.label}</span>
+                <span className={isUrgent ? 'text-red-100' : 'text-indigo-100'}>{item.icon}</span>
+                <span className="flex-1">{item.label}</span>
+                {item.badge > 0 && (
+                  <span
+                    className={`inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                      isUrgent
+                        ? 'bg-white text-red-700 animate-pulse'
+                        : 'bg-indigo-100 text-indigo-700'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
       </div>
 
-      {/* Bottom Section - Logout */}
       <div
         onClick={logoutUser}
         className="p-4 border-t border-indigo-500 flex items-center space-x-3 hover:bg-indigo-600 cursor-pointer transition-colors duration-200"

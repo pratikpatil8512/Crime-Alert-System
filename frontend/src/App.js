@@ -14,6 +14,10 @@ import ReportTip from './pages/ReportTip';
 import TipModeration from './pages/TipModeration';
 import Statistics from './pages/Statistics';
 import ManageCrimes from './pages/ManageCrimes';
+import MyReports from './pages/MyReports';
+import EmergencyHub from './pages/EmergencyHub';
+import NeedHelp from './pages/NeedHelp';
+import HelpRequests from './pages/HelpRequests';
 import NotFound from './pages/PageNotFound'
 
 
@@ -49,6 +53,42 @@ export default function App() {
         />
 
         <Route path="/report-tip" element={<ReportTip />} />
+
+        <Route
+          path="/my-reports"
+          element={
+            <ProtectedRoute>
+              <MyReports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/emergency"
+          element={
+            <ProtectedRoute>
+              <EmergencyHub />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/need-help"
+          element={
+            <ProtectedRoute allowedRoles={['tourist', 'citizen']}>
+              <NeedHelp />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/help-requests"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'police']}>
+              <HelpRequests />
+            </ProtectedRoute>
+          }
+        />
 
 
         <Route
