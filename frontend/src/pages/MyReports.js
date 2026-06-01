@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Clock3, FileText, MapPin, RefreshCw, XCircle
 import API from '../utils/api';
 import AppShell from '../components/AppShell';
 import { getUserName } from '../utils/auth';
+import { useSocketEvent } from '../context/SocketContext';
 
 function statusClasses(status) {
   switch (status) {
@@ -46,6 +47,7 @@ export default function MyReports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [banner, setBanner] = useState('');
 
   const fetchReports = async () => {
     setLoading(true);
@@ -65,6 +67,27 @@ export default function MyReports() {
   useEffect(() => {
     fetchReports();
   }, []);
+
+  useSocketEvent('tip:status-changed', (payload) => {
+    setReports((prev) =>
+      prev.map((report) =>
+        report.id === payload.tipId
+          ? {
+              ...report,
+              status: payload.status,
+              crime_id: payload.crimeId ?? report.crime_id,
+              moderator_notes: payload.moderatorNotes ?? report.moderator_notes,
+              moderated_at: new Date().toISOString(),
+            }
+          : report
+      )
+    );
+    setBanner(
+      payload.status === 'approved'
+        ? 'One of your tips was approved in real time.'
+        : 'One of your tips was denied in real time.'
+    );
+  });
 
   const filteredReports = useMemo(() => {
     if (statusFilter === 'all') return reports;
@@ -121,6 +144,12 @@ export default function MyReports() {
             </div>
           </div>
         </div>
+
+        {banner && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
+            {banner}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard icon={<FileText className="text-sky-700" size={18} />} label="Total Reports" value={summary.total} tone="bg-sky-50 text-sky-900 border-sky-100" />

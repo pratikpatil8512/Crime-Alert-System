@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, /*Navigate*/ } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import { SocketProvider } from './context/SocketContext';
 
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -23,8 +24,9 @@ import NotFound from './pages/PageNotFound'
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
+    <SocketProvider>
+      <Router>
+        <Routes>
         {/* ✅ Homepage */}
         <Route path="/" element={<Home />} />
 
@@ -148,7 +150,8 @@ export default function App() {
 
         {/* Fallback redirect */}
         <Route path="*" element={<NotFound/>} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </SocketProvider>
   );
 }

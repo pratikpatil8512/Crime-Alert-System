@@ -4,6 +4,7 @@ import api from '../utils/api';
 import TipLocationPreview from '../components/TipLocationPreview';
 import AppShell from '../components/AppShell';
 import { getUserName } from '../utils/auth';
+import { useSocketEvent } from '../context/SocketContext';
 
 const CATEGORY_OPTIONS = ['theft', 'assault', 'robbery', 'harassment', 'fraud', 'vandalism', 'other'];
 const SEVERITY_OPTIONS = ['minor', 'moderate', 'critical'];
@@ -59,6 +60,34 @@ export default function TipModeration() {
   useEffect(() => {
     fetchTips();
   }, []);
+
+  useSocketEvent('tip:new', (payload) => {
+    setTips((prev) => [
+      {
+        ...payload,
+        reported_at: payload.createdAt,
+      },
+      ...prev.filter((tip) => tip.id !== payload.id),
+    ]);
+    setDrafts((prev) => ({
+      ...prev,
+      [payload.id]: {
+        category: (payload.category || '').toLowerCase(),
+        severity: (payload.severity || '').toLowerCase(),
+      },
+    }));
+    setStatusMessage({ type: 'success', text: 'A new tip arrived live in the moderation queue.' });
+  });
+
+  useSocketEvent('tip:approved', (payload) => {
+    setTips((prev) => prev.filter((tip) => tip.id !== payload.tipId));
+    setStatusMessage({ type: 'success', text: 'A tip was approved and removed from the live queue.' });
+  });
+
+  useSocketEvent('tip:denied', (payload) => {
+    setTips((prev) => prev.filter((tip) => tip.id !== payload.tipId));
+    setStatusMessage({ type: 'success', text: 'A tip was denied and removed from the live queue.' });
+  });
 
   const pendingCount = tips.length;
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { getUserRole, getUserName, logoutUser } from '../utils/auth';
 import API from '../utils/api';
+import { useSocketEvent } from '../context/SocketContext';
 import {
   AlertCircle,
   BarChart3,
@@ -47,6 +48,20 @@ export default function Sidebar() {
       window.clearInterval(interval);
     };
   }, [role]);
+
+  useSocketEvent('help-request:new', (payload) => {
+    if (role !== 'admin' && role !== 'police') return;
+    if (payload.active) {
+      setActiveHelpCount((prev) => prev + 1);
+    }
+  });
+
+  useSocketEvent('help-request:resolved', (payload) => {
+    if (role !== 'admin' && role !== 'police') return;
+    if (payload.id) {
+      setActiveHelpCount((prev) => Math.max(0, prev - 1));
+    }
+  });
 
   const menu = [
     { to: '/dashboard', label: 'Dashboard', icon: <Home size={18} /> },
