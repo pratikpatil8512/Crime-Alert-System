@@ -1,20 +1,24 @@
 // backend/controllers/tipController.js
 const pool = require('../db');
 const { v4: uuidv4 } = require('uuid');
-const sendEmail = require('../utils/email'); // nodemailer utility
+const sendEmail = require('../utils/email');
 
 function isEmail(str) {
-  return typeof str === "string" && str.includes("@");
+  return typeof str === 'string' && str.includes('@');
 }
 
-/* ---------------------------------------------------------
-   1) REPORT TIP (ONLY AUTHENTICATED USER, NO ANONYMOUS)
---------------------------------------------------------- */
+function emitToRoles(io, roles, eventName, payload) {
+  if (!io) return;
+  for (const role of roles) {
+    io.to(`role:${role}`).emit(eventName, payload);
+  }
+}
+
 exports.reportTip = async (req, res) => {
   try {
     const user = req.user;
     if (!user || !user.id) {
-      return res.status(401).json({ error: "Login required to report a tip" });
+      return res.status(401).json({ error: 'Login required to report a tip' });
     }
 
     const {
@@ -23,15 +27,15 @@ exports.reportTip = async (req, res) => {
       category,
       severity,
       latitude,
-      longitude
+      longitude,
     } = req.body;
 
     if (!title || !description || !category || !severity) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (typeof latitude !== "number" || typeof longitude !== "number") {
-      return res.status(400).json({ error: "Location is required" });
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return res.status(400).json({ error: 'Location is required' });
     }
 
     const id = uuidv4();
@@ -69,32 +73,46 @@ exports.reportTip = async (req, res) => {
       severity,
       longitude,
       latitude,
-      user.id
+      user.id,
     ]);
 
-    // ⬅ (Optional) Notify admins
+    const io = req.app.get('io');
+    emitToRoles(io, ['admin', 'police'], 'tip:new', {
+      id,
+      title,
+      description,
+      category,
+      severity,
+      latitude,
+      longitude,
+      status: 'pending',
+      reporter: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+      createdAt: new Date().toISOString(),
+    });
+
     if (process.env.ADMIN_EMAILS) {
-      process.env.ADMIN_EMAILS.split(",").forEach(adminEmail => {
+      process.env.ADMIN_EMAILS.split(',').forEach((adminEmail) => {
         if (isEmail(adminEmail.trim())) {
           sendEmail(
             adminEmail.trim(),
-            "New crime tip reported",
+            'New crime tip reported',
             `User ${user.name} <${user.email}> submitted a new tip: ${title}`
-          ).catch(err => console.log("Admin email error:", err));
+          ).catch((err) => console.log('Admin email error:', err));
         }
       });
     }
 
-    return res.json({ message: "Tip submitted successfully", id });
+    return res.json({ message: 'Tip submitted successfully', id });
   } catch (err) {
-    console.error("reportTip error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error('reportTip error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
-/* ---------------------------------------------------------
-   2) GET PENDING TIPS (ADMIN / POLICE)
---------------------------------------------------------- */
 exports.getPendingTips = async (req, res) => {
   try {
     const q = `
@@ -107,7 +125,6 @@ exports.getPendingTips = async (req, res) => {
         t.reported_at,
         ST_Y(t.location::geometry) AS latitude,
         ST_X(t.location::geometry) AS longitude,
-
         u.id AS reporter_id,
         u.name AS reporter_name,
         u.email AS reporter_email,
@@ -116,7 +133,6 @@ exports.getPendingTips = async (req, res) => {
         ST_X(u.current_location::geometry) AS reporter_longitude,
         u.is_verified,
         u.risk_level
-
       FROM anonymous_tips t
       LEFT JOIN users u ON u.id = t.reporter_id
       WHERE t.status = 'pending'
@@ -125,7 +141,7 @@ exports.getPendingTips = async (req, res) => {
 
     const { rows } = await pool.query(q);
 
-    const formatted = rows.map(r => ({
+    const formatted = rows.map((r) => ({
       id: r.id,
       title: r.title,
       description: r.description,
@@ -142,25 +158,22 @@ exports.getPendingTips = async (req, res) => {
         last_latitude: r.reporter_latitude,
         last_longitude: r.reporter_longitude,
         is_verified: r.is_verified,
-        risk_level: r.risk_level
-      }
+        risk_level: r.risk_level,
+      },
     }));
 
     return res.json(formatted);
   } catch (err) {
-    console.error("getPendingTips error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error('getPendingTips error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
-/* ---------------------------------------------------------
-   2.5) GET CURRENT USER'S TIPS
---------------------------------------------------------- */
 exports.getMyTips = async (req, res) => {
   try {
     const user = req.user;
     if (!user || !user.id) {
-      return res.status(401).json({ error: "Login required" });
+      return res.status(401).json({ error: 'Login required' });
     }
 
     const q = `
@@ -186,14 +199,11 @@ exports.getMyTips = async (req, res) => {
     const { rows } = await pool.query(q, [user.id]);
     return res.json(rows);
   } catch (err) {
-    console.error("getMyTips error:", err);
-    return res.status(500).json({ error: "Server error" });
+    console.error('getMyTips error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 };
 
-/* ---------------------------------------------------------
-   3) APPROVE TIP
---------------------------------------------------------- */
 exports.approveTip = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -203,9 +213,8 @@ exports.approveTip = async (req, res) => {
     const moderatorId = req.user.id;
     const moderatorRole = req.user.role;
 
-    await client.query("BEGIN");
+    await client.query('BEGIN');
 
-    // STEP 1 — Lock the row (no joins allowed!)
     const tipRes = await client.query(
       `SELECT *,
               ST_X(location::geometry) AS lon,
@@ -217,13 +226,12 @@ exports.approveTip = async (req, res) => {
     );
 
     if (!tipRes.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Tip not found" });
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Tip not found' });
     }
 
     const tip = tipRes.rows[0];
 
-    // STEP 2 — Fetch reporter data (separate query)
     let reporterEmail = null;
     const userRes = await client.query(
       `SELECT email FROM users WHERE id = $1`,
@@ -235,7 +243,6 @@ exports.approveTip = async (req, res) => {
     const finalCategory = category || tip.category;
     const finalSeverity = severity || tip.severity;
 
-    // STEP 3 — Create crime record
     const crimeRes = await client.query(
       `INSERT INTO crime_data (
         id, reporter_id,
@@ -262,13 +269,12 @@ exports.approveTip = async (req, res) => {
         finalCategory,
         finalSeverity,
         tip.lon,
-        tip.lat
+        tip.lat,
       ]
     );
 
     const crimeId = crimeRes.rows[0].id;
 
-    // STEP 4 — Update tip
     await client.query(
       `UPDATE anonymous_tips
        SET status='approved',
@@ -281,30 +287,43 @@ exports.approveTip = async (req, res) => {
       [moderatorId, moderatorRole, notes || null, crimeId, tipId]
     );
 
-    await client.query("COMMIT");
+    await client.query('COMMIT');
 
-    // STEP 5 — Notify reporter
+    const io = req.app.get('io');
+    emitToRoles(io, ['admin', 'police'], 'tip:approved', {
+      tipId,
+      crimeId,
+      moderatorId,
+      moderatorRole,
+      status: 'approved',
+    });
+    if (tip.reporter_id) {
+      io?.to(`user:${tip.reporter_id}`).emit('tip:status-changed', {
+        tipId,
+        status: 'approved',
+        crimeId,
+        moderatorNotes: notes || null,
+      });
+    }
+
     if (isEmail(reporterEmail)) {
       sendEmail(
         reporterEmail,
-        "Your crime tip has been approved",
+        'Your crime tip has been approved',
         `Your tip "${tip.title}" is now verified and added as crime ID: ${crimeId}.`
-      ).catch(err => console.log("Email error:", err));
+      ).catch((err) => console.log('Email error:', err));
     }
 
-    return res.json({ message: "Tip approved & crime created", crimeId });
+    return res.json({ message: 'Tip approved & crime created', crimeId });
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("approveTip error:", err);
-    res.status(500).json({ error: "Server error" });
+    await client.query('ROLLBACK');
+    console.error('approveTip error:', err);
+    res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();
   }
 };
 
-/* ---------------------------------------------------------
-   4) DENY TIP
---------------------------------------------------------- */
 exports.denyTip = async (req, res) => {
   try {
     const tipId = req.params.id;
@@ -321,31 +340,45 @@ exports.denyTip = async (req, res) => {
           moderator_notes=$3,
           moderated_at=NOW()
       WHERE id=$4
-      RETURNING reporter_contact, title;
+      RETURNING reporter_id, reporter_contact, title;
     `;
 
     const result = await pool.query(q, [
       moderatorId,
       moderatorRole,
       reason || null,
-      tipId
+      tipId,
     ]);
 
-    if (!result.rows.length) return res.status(404).json({ error: "Tip not found" });
+    if (!result.rows.length) return res.status(404).json({ error: 'Tip not found' });
 
-    const { reporter_contact, title } = result.rows[0];
+    const { reporter_id: reporterId, reporter_contact, title } = result.rows[0];
+
+    const io = req.app.get('io');
+    emitToRoles(io, ['admin', 'police'], 'tip:denied', {
+      tipId,
+      status: 'denied',
+      reason: reason || null,
+    });
+    if (reporterId) {
+      io?.to(`user:${reporterId}`).emit('tip:status-changed', {
+        tipId,
+        status: 'denied',
+        moderatorNotes: reason || null,
+      });
+    }
 
     if (isEmail(reporter_contact)) {
       sendEmail(
         reporter_contact,
-        "Your crime tip was denied",
-        `Your tip "${title}" was denied.\nReason: ${reason || "Not provided"}`
+        'Your crime tip was denied',
+        `Your tip "${title}" was denied.\nReason: ${reason || 'Not provided'}`
       );
     }
 
-    return res.json({ message: "Tip denied" });
+    return res.json({ message: 'Tip denied' });
   } catch (err) {
-    console.error("denyTip error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error('denyTip error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 };

@@ -1,4 +1,5 @@
 const pool = require('../db');
+const sendEmail = require('../utils/email');
 
 function normalizeHelpMessage(rawMessage) {
   const text = String(rawMessage || '').trim();
@@ -10,6 +11,161 @@ function toHelpStatus(row) {
   if (!row?.active) return 'resolved';
   if (row?.acknowledged_at) return 'claimed';
   return 'new';
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function getResponderEmails() {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT email
+     FROM users
+     WHERE role IN ('admin', 'police')
+       AND is_verified = TRUE
+       AND email IS NOT NULL
+       AND TRIM(email) <> ''`
+  );
+
+  return rows
+    .map((row) => String(row.email || '').trim())
+    .filter(Boolean);
+}
+
+function buildHelpAlertEmail({ actor, payload }) {
+  const reporterName = actor?.name || actor?.email || 'Unknown user';
+  const mapsUrl = `https://www.google.com/maps?q=${payload.latitude},${payload.longitude}`;
+  const createdAt = payload.created_at ? new Date(payload.created_at).toLocaleString('en-IN', { hour12: true }) : 'Just now';
+
+  return {
+    subject: `Emergency Help Request: ${reporterName}`,
+    title: 'Emergency Help Request',
+    subtitle: 'A user has triggered an urgent distress signal in Crime Alert System.',
+    accentColor: '#dc2626',
+    text: [
+      'A new emergency help request has been submitted in Crime Alert System.',
+      '',
+      `Reporter: ${reporterName}`,
+      `Reporter Email: ${actor?.email || 'N/A'}`,
+      `Reporter Phone: ${actor?.phone || 'N/A'}`,
+      `Role: ${actor?.role || 'N/A'}`,
+      `City: ${payload.city || 'Not provided'}`,
+      `Time: ${createdAt}`,
+      `Coordinates: ${payload.latitude}, ${payload.longitude}`,
+      `Google Maps: ${mapsUrl}`,
+      '',
+      'Message:',
+      payload.message || 'No message provided.',
+    ].join('\n'),
+    bodyHtml: `
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr><td style="padding: 8px 0; font-weight: 700;">Reporter</td><td style="padding: 8px 0;">${escapeHtml(reporterName)}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">Email</td><td style="padding: 8px 0;">${escapeHtml(actor?.email || 'N/A')}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">Phone</td><td style="padding: 8px 0;">${escapeHtml(actor?.phone || 'N/A')}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">Role</td><td style="padding: 8px 0;">${escapeHtml(actor?.role || 'N/A')}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">City</td><td style="padding: 8px 0;">${escapeHtml(payload.city || 'Not provided')}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">Time</td><td style="padding: 8px 0;">${escapeHtml(createdAt)}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: 700;">Coordinates</td><td style="padding: 8px 0;">${escapeHtml(`${payload.latitude}, ${payload.longitude}`)}</td></tr>
+      </table>
+
+      <div style="margin-top: 20px; padding: 16px; background: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div style="font-weight: 700; margin-bottom: 8px;">User Message</div>
+        <div>${escapeHtml(payload.message || 'No message provided.')}</div>
+      </div>
+
+      <div style="margin-top: 24px;">
+        <a href="${mapsUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 700;">
+          Open Location in Google Maps
+        </a>
+      </div>
+    `,
+  };
+}
+
+async function notifyRespondersOfHelpAlert(actor, payload) {
+  try {
+    const recipients = await getResponderEmails();
+    if (!recipients.length) return;
+
+    const email = buildHelpAlertEmail({ actor, payload });
+    await Promise.allSettled(
+      recipients.map((recipient) =>
+        sendEmail(recipient, email.subject, email.text, {
+          title: email.title,
+          subtitle: email.subtitle,
+          accentColor: email.accentColor,
+          bodyHtml: email.bodyHtml,
+        })
+      )
+    );
+  } catch (error) {
+    console.error('notifyRespondersOfHelpAlert error:', error);
+  }
+}
+
+function buildHelpResolvedEmail({ reporter, responder, payload }) {
+  const resolvedAt = payload.expires_at ? new Date(payload.expires_at).toLocaleString('en-IN', { hour12: true }) : 'Recently';
+  const reporterName = reporter?.name || reporter?.email || 'User';
+  const responderName = responder?.name || responder?.email || 'A responder';
+
+  return {
+    subject: 'Your emergency help request has been resolved',
+    title: 'Help Request Resolved',
+    subtitle: 'Your distress signal has been marked as resolved by the response team.',
+    accentColor: '#059669',
+    text: [
+      `Hello ${reporterName},`,
+      '',
+      'Your emergency help request has been marked as resolved.',
+      `Resolved by: ${responderName}`,
+      `Resolved at: ${resolvedAt}`,
+      '',
+      'Original message:',
+      payload.message || 'No message provided.',
+      '',
+      'If you still need assistance, please open the app and raise another help request immediately.',
+    ].join('\n'),
+    bodyHtml: `
+      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#374151;">
+        Hello <strong>${escapeHtml(reporterName)}</strong>,
+      </p>
+      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#374151;">
+        Your emergency help request has been marked as <strong>resolved</strong> by the response team.
+      </p>
+      <table style="width:100%; border-collapse:collapse;">
+        <tr><td style="padding:8px 0; font-weight:700;">Resolved by</td><td style="padding:8px 0;">${escapeHtml(responderName)}</td></tr>
+        <tr><td style="padding:8px 0; font-weight:700;">Resolved at</td><td style="padding:8px 0;">${escapeHtml(resolvedAt)}</td></tr>
+      </table>
+      <div style="margin-top:20px; padding:16px; background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb;">
+        <div style="font-weight:700; margin-bottom:8px;">Original message</div>
+        <div>${escapeHtml(payload.message || 'No message provided.')}</div>
+      </div>
+      <p style="margin:20px 0 0; font-size:14px; line-height:1.7; color:#4b5563;">
+        If you still need assistance, please open the app and raise another help request immediately.
+      </p>
+    `,
+  };
+}
+
+async function notifyHelpResolved({ reporter, responder, payload }) {
+  if (!reporter?.email) return;
+
+  try {
+    const email = buildHelpResolvedEmail({ reporter, responder, payload });
+    await sendEmail(reporter.email, email.subject, email.text, {
+      title: email.title,
+      subtitle: email.subtitle,
+      accentColor: email.accentColor,
+      bodyHtml: email.bodyHtml,
+    });
+  } catch (error) {
+    console.error('notifyHelpResolved error:', error);
+  }
 }
 
 async function createHelpAlert(req, res) {
@@ -101,6 +257,8 @@ async function createHelpAlert(req, res) {
     if (io) {
       io.emit('help-request:new', payload);
     }
+
+    await notifyRespondersOfHelpAlert(actor, payload);
 
     return res.status(201).json(payload);
   } catch (err) {
@@ -323,6 +481,9 @@ async function resolveHelpAlert(req, res) {
       return res.status(404).json({ error: 'Help request not found.' });
     }
 
+    const reporterRes = rows[0]?.created_by
+      ? await pool.query(`SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1`, [rows[0].created_by])
+      : { rows: [] };
     const ackUserRes = rows[0]?.acknowledged_by
       ? await pool.query(`SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1`, [rows[0].acknowledged_by])
       : { rows: [] };
@@ -336,6 +497,12 @@ async function resolveHelpAlert(req, res) {
     if (io) {
       io.emit('help-request:resolved', payload);
     }
+
+    await notifyHelpResolved({
+      reporter: reporterRes.rows[0] || null,
+      responder: ackUserRes.rows[0] || null,
+      payload,
+    });
 
     return res.json(payload);
   } catch (err) {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { forgotPassword, resetPassword } from "../api/auth";
+import API from "../utils/api";
 import GlassCard from "./GlassCard";
 
 export default function ForgotPasswordForm({ onBack }) {
@@ -13,7 +13,7 @@ export default function ForgotPasswordForm({ onBack }) {
     e.preventDefault();
     setMsg("");
     try {
-      const { data } = await forgotPassword({ email });
+      const { data } = await API.post("/auth/forgot-password", { email });
       setMsg(data.message);
       setStep(2);
     } catch (err) {
@@ -24,7 +24,7 @@ export default function ForgotPasswordForm({ onBack }) {
   const handleReset = async e => {
     e.preventDefault();
     try {
-      const { data } = await resetPassword({ email, otp, newPassword });
+      const { data } = await API.post("/auth/reset-password", { email, otp, newPassword });
       setMsg(data.message);
       setStep(1);
       setEmail("");

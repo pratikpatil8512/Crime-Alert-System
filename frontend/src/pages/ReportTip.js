@@ -1,7 +1,8 @@
-// frontend/src/pages/ReportTip.js
-import { useState, useEffect } from 'react';
-import API from '../utils/api';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import API from '../utils/api';
+import AppShell from '../components/AppShell';
+import { getUserName } from '../utils/auth';
 
 export default function ReportTip() {
   const [title, setTitle] = useState('');
@@ -10,179 +11,156 @@ export default function ReportTip() {
   const [severity, setSeverity] = useState('');
   const [loc, setLoc] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState({ type: '', text: '' });
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Logic: Request location on mount
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(pos => {
-        setLoc({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-      }, () => setLoc(null), { enableHighAccuracy: true });
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLoc({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        },
+        () => setLoc(null),
+        { enableHighAccuracy: true }
+      );
     }
   }, []);
 
-  const submit = async (e) => {
-    // Logic: Submission handler (preserved)
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
+    setStatus({ type: '', text: '' });
+
     if (!title || !desc || !category || !severity || !loc) {
-      return alert('Please fill all fields and allow location.');
+      setStatus({ type: 'error', text: 'Please fill all fields and allow location.' });
+      return;
     }
+
     setLoading(true);
     try {
-      const payload = {
+      await API.post('/tips/report', {
         title,
         description: desc,
         category,
         severity,
         latitude: loc.latitude,
-        longitude: loc.longitude
-      };
-      await API.post('/tips/report', payload);
-      alert('Tip submitted successfully.');
-      navigate('/');
+        longitude: loc.longitude,
+      });
+
+      setStatus({ type: 'success', text: 'Tip submitted successfully. Redirecting to My Reports...' });
+      setTimeout(() => navigate('/my-reports'), 900);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to submit tip');
+      setStatus({ type: 'error', text: err.response?.data?.error || 'Failed to submit tip' });
     } finally {
       setLoading(false);
     }
   };
 
-  // ------------------------------------------------------------------
-  // DESIGN ENHANCEMENT START
-  // ------------------------------------------------------------------
-
-  // Tailwind CSS classes for consistent styling
-  const inputClass = "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out shadow-sm placeholder-gray-400";
-  const selectClass = "w-full px-4 py-3 border border-gray-300 rounded-lg appearance-none focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out shadow-sm bg-white";
-  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
-  
-  // Dynamic class for location text (red for error, gray for success)
-  const locTextColor = loc ? 'text-green-600' : 'text-red-500';
+  const inputClass = 'w-full rounded-2xl border border-gray-300 px-4 py-3 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500';
+  const selectClass = 'w-full appearance-none rounded-2xl border border-gray-300 bg-white px-4 py-3 shadow-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500';
+  const labelClass = 'mb-1 block text-sm font-medium text-gray-700';
+  const locTextColor = loc ? 'text-green-700' : 'text-red-600';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start justify-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-xl bg-white p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-200">
-        
-        {/* Header Section */}
-        <header className="mb-8 border-b pb-4">
-          <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
-            🚨 Report a Tip
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            (You must be logged in to submit a tip)
+    <AppShell userName={getUserName()}>
+      <div className="mx-auto w-full max-w-4xl space-y-6">
+        <section className="rounded-[30px] border border-white/30 bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-2xl">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold backdrop-blur">
+            Report Tip
+          </div>
+          <h1 className="mt-4 text-3xl font-bold">Share a crime tip securely</h1>
+          <p className="mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
+            Your report goes to moderators for review. After submission, you can track it in My Reports.
           </p>
-        </header>
+        </section>
 
-        <form onSubmit={submit} className="space-y-6">
-          
-          {/* Title Field */}
-          <div>
-            <label htmlFor="title" className={labelClass}>Short Title</label>
-            <input 
-              id="title"
-              value={title} 
-              onChange={e=>setTitle(e.target.value)} 
-              placeholder="e.g., Suspicious activity near school" 
-              className={inputClass} 
-              type="text"
-            />
+        {status.text && (
+          <div className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${status.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+            {status.text}
           </div>
+        )}
 
-          {/* Description Field */}
-          <div>
-            <label htmlFor="description" className={labelClass}>Describe the Incident</label>
-            <textarea 
-              id="description"
-              value={desc} 
-              onChange={e=>setDesc(e.target.value)} 
-              placeholder="Provide detailed information about the incident, location, time, and any persons involved." 
-              className={`${inputClass} min-h-[120px] resize-y`} 
-            />
-          </div>
-
-          {/* Category & Severity Dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            
-            {/* Category Select */}
+        <section className="rounded-[28px] border border-gray-100 bg-white p-5 shadow-lg sm:p-6">
+          <form onSubmit={submit} className="space-y-6">
             <div>
-              <label htmlFor="category" className={labelClass}>Category</label>
-              <div className="relative">
-                <select 
+              <label htmlFor="title" className={labelClass}>Short title</label>
+              <input
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Suspicious activity near school"
+                className={inputClass}
+                type="text"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="description" className={labelClass}>Describe the incident</label>
+              <textarea
+                id="description"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder="Provide detailed information about the incident, location, time, and any persons involved."
+                className={`${inputClass} min-h-[140px] resize-y`}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="category" className={labelClass}>Category</label>
+                <select
                   id="category"
-                  value={category} 
-                  onChange={e=>setCategory(e.target.value)} 
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
                   className={selectClass}
                 >
-                  <option value="" disabled>Select Category</option>
+                  <option value="" disabled>Select category</option>
                   <option value="theft">Theft</option>
                   <option value="assault">Assault</option>
                   <option value="robbery">Robbery</option>
                   <option value="fraud">Fraud</option>
-                  <option value="Harrasement">Harrasement</option>
+                  <option value="harassment">Harassment</option>
                   <option value="other">Other</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
-                  <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.99l3.71-3.76a.75.75 0 111.08 1.04l-4.25 4.3a.75.75 0 01-1.08 0l-4.25-4.3a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
-                </div>
               </div>
-            </div>
 
-            {/* Severity Select */}
-            <div>
-              <label htmlFor="severity" className={labelClass}>Severity</label>
-              <div className="relative">
-                <select 
+              <div>
+                <label htmlFor="severity" className={labelClass}>Severity</label>
+                <select
                   id="severity"
-                  value={severity} 
-                  onChange={e=>setSeverity(e.target.value)} 
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value)}
                   className={selectClass}
                 >
-                  <option value="" disabled>Select Severity</option>
+                  <option value="" disabled>Select severity</option>
                   <option value="minor">Minor</option>
                   <option value="moderate">Moderate</option>
                   <option value="critical">Critical</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
-                  <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.99l3.71-3.76a.75.75 0 111.08 1.04l-4.25 4.3a.75.75 0 01-1.08 0l-4.25-4.3a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
-                </div>
               </div>
             </div>
-          </div>
 
-          {/* Location Display */}
-          <div className="pt-2">
-            <h3 className="text-base font-semibold text-gray-900 mb-1">
-              Incident Location (Required)
-            </h3>
-            <div className={`p-3 rounded-lg border-2 ${loc ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
-              <p className={`text-sm font-mono ${locTextColor}`}>
-                {loc 
-                  ? `Latitude: ${loc.latitude.toFixed(5)}, Longitude: ${loc.longitude.toFixed(5)}` 
-                  : 'Location Not Available. Please ensure you allow location access to submit the tip.'
-                }
-              </p>
+            <div>
+              <h2 className="mb-2 text-base font-semibold text-gray-900">Incident location</h2>
+              <div className={`rounded-2xl border-2 p-4 ${loc ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+                <p className={`text-sm font-mono ${locTextColor}`}>
+                  {loc
+                    ? `Latitude: ${loc.latitude.toFixed(5)}, Longitude: ${loc.longitude.toFixed(5)}`
+                    : 'Location not available. Please allow location access to submit the tip.'}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <button 
-            type="submit" 
-            disabled={loading} 
-            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-lg text-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed mt-8"
-          >
-            {loading ? (
-                <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Sending...
-                </>
-            ) : 'Send Tip Securely'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-4 py-3 text-base font-bold text-white shadow-lg transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? 'Sending...' : 'Send Tip Securely'}
+            </button>
+          </form>
+        </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

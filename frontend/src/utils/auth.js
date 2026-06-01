@@ -36,11 +36,18 @@ export const getUserName = () => {
   return name || 'Guest';
 };
 
+export const getUserId = () => {
+  const userId = localStorage.getItem('userId');
+  return userId || null;
+};
+
 // ✅ Logout (manual or auto)
 export const logoutUser = (isAuto = false) => {
   localStorage.removeItem('token');
   localStorage.removeItem('role');
   localStorage.removeItem('name');
+  localStorage.removeItem('userId');
+  localStorage.removeItem('userEmail');
 
   if (isAuto) {
     // Add a flag so login page can show a friendly notice

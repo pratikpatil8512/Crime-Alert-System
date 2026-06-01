@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCircle2, Handshake, LocateFixed, PhoneCall, ShieldAlert } from 'lucide-react';
 import { io } from 'socket.io-client';
-import API from '../utils/api';
+import API, { SOCKET_BASE_URL } from '../utils/api';
 import Sidebar from '../components/Sidebar';
 import Topbar from '../components/Topbar';
-
-const SOCKET_URL = 'http://localhost:5000';
 
 export default function HelpRequests() {
   const [userName, setUserName] = useState('Responder');
@@ -39,7 +37,13 @@ export default function HelpRequests() {
       Notification.requestPermission().catch(() => {});
     }
 
-    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+    const socket = io(SOCKET_BASE_URL, {
+      transports: ['websocket', 'polling'],
+      auth: {
+        userId: localStorage.getItem('userId'),
+        role: localStorage.getItem('role'),
+      },
+    });
 
     socket.on('help-request:new', (payload) => {
       setRequests((prev) => [payload, ...prev.filter((item) => item.id !== payload.id)]);

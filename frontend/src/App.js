@@ -31,7 +31,7 @@ export default function App() {
         {/* Login */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="//verify-email" element={<VerifyEmail />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         <Route
   path="/report"
@@ -52,7 +52,14 @@ export default function App() {
           }
         />
 
-        <Route path="/report-tip" element={<ReportTip />} />
+        <Route
+          path="/report-tip"
+          element={
+            <ProtectedRoute>
+              <ReportTip />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/my-reports"
